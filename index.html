@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Phone</title>
-    <!-- Twilio SDK -->
-    <script type="text/javascript" src="https://media.twiliocdn.com/sdk/js/client/v1.14/twilio.min.js"></script>
+    <!-- Twilio Voice SDK (Updated to v2) -->
+    <script type="text/javascript" src="https://sdk.twilio.com/js/voice/releases/2.11.0/twilio.min.js"></script>
     
     <style>
         /* iOS Design System Variables */
@@ -359,7 +359,7 @@
         if(tabName === 'recents') loadRecents();
     }
 
-    // 3. TWILIO SETUP
+    // 3. TWILIO SETUP (UPDATED FOR VOICE SDK V2)
     async function setupPhone() {
         statusDiv.innerText = 'Connecting to Twilio...';
         try {
@@ -367,29 +367,35 @@
             const response = await fetch('/.netlify/functions/token');
             const data = await response.json();
             
-            Twilio.Device.setup(data.token);
+            // SDK v2 Initialization
+            device = new Twilio.Device(data.token, {
+                // strict settings for better performance
+                codecPreferences: ['opus', 'pcmu'],
+                fakeLocalDTMF: true,
+                enableRingingState: true
+            });
 
-            Twilio.Device.ready(function(device) {
+            device.on('registered', function() {
                 statusDiv.innerText = 'Online';
                 statusDiv.style.color = '#34c759';
             });
 
-            Twilio.Device.error(function(error) {
-                console.error(error);
+            device.on('error', function(error) {
+                console.error("Twilio Error:", error);
                 statusDiv.innerText = 'Error: ' + error.message;
             });
             
-            Twilio.Device.disconnect(function() {
-                endCallUI();
-            });
+            // Register the device
+            device.register();
 
         } catch (e) {
             statusDiv.innerText = 'System Error';
+            console.error(e);
         }
     }
 
-    // 4. CALL LOGIC
-    function startCall() {
+    // 4. CALL LOGIC (UPDATED FOR VOICE SDK V2)
+    async function startCall() {
         const number = input.value;
         if(!number) return;
 
@@ -403,12 +409,35 @@
 
         // Twilio Connect
         const params = { To: number };
-        Twilio.Device.connect(params);
+        
+        if (device) {
+            try {
+                // In v2, connect returns a Promise resolving to a Call object
+                const call = await device.connect({ params: params });
+                
+                // Set up listener for when call ends (remote or local)
+                call.on('disconnect', () => {
+                    endCallUI();
+                });
+                
+                call.on('error', (err) => {
+                    console.error("Call error:", err);
+                    endCallUI();
+                });
+
+            } catch (err) {
+                console.error("Connection failed:", err);
+                statusDiv.innerText = 'Call Failed';
+                endCallUI();
+            }
+        }
     }
 
     function endCall() {
-        Twilio.Device.disconnectAll();
-        endCallUI();
+        if (device) {
+            device.disconnectAll();
+        }
+        // UI will be reset by the 'disconnect' listener above
     }
 
     function endCallUI() {
