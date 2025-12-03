@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Softphone</title>
+    <script type="text/javascript" src="https://media.twiliocdn.com/sdk/js/client/v1.14/twilio.min.js"></script>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f2f5; }
+        .phone { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; }
+        input { padding: 10px; font-size: 18px; width: 200px; margin-bottom: 20px; border: 1px solid #ccc; border-radius: 5px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; margin: 5px; color: white; }
+        #call-btn { background-color: #28a745; }
+        #hangup-btn { background-color: #dc3545; display: none; }
+        #status { margin-top: 15px; color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="phone">
+    <h2>Web Dialer</h2>
+    <input type="tel" id="phone-number" placeholder="+15551234567">
+    <br>
+    <button id="call-btn">Call</button>
+    <button id="hangup-btn">Hang Up</button>
+    <div id="status">Ready to initialize...</div>
+</div>
+
+<script>
+    let device;
+
+    // 1. Fetch the Token from our Netlify Function
+    async function setupPhone() {
+        document.getElementById('status').innerText = 'Getting permissions...';
+        
+        try {
+            const response = await fetch('/.netlify/functions/token');
+            const data = await response.json();
+            
+            // 2. Initialize Twilio Device
+            Twilio.Device.setup(data.token);
+
+            Twilio.Device.ready(function(device) {
+                document.getElementById('status').innerText = 'Ready to call!';
+            });
+
+            Twilio.Device.error(function(error) {
+                console.error(error);
+                document.getElementById('status').innerText = 'Error: ' + error.message;
+            });
+            
+        } catch (e) {
+            document.getElementById('status').innerText = 'Could not start phone system.';
+        }
+    }
+
+    // 3. Handle Buttons
+    const callBtn = document.getElementById('call-btn');
+    const hangupBtn = document.getElementById('hangup-btn');
+    const numberInput = document.getElementById('phone-number');
+
+    callBtn.onclick = function() {
+        const params = { To: numberInput.value };
+        console.log("Calling " + params.To + "...");
+        Twilio.Device.connect(params);
+        
+        document.getElementById('status').innerText = 'Calling...';
+        callBtn.style.display = 'none';
+        hangupBtn.style.display = 'inline-block';
+    };
+
+    hangupBtn.onclick = function() {
+        Twilio.Device.disconnectAll();
+        document.getElementById('status').innerText = 'Call ended.';
+        callBtn.style.display = 'inline-block';
+        hangupBtn.style.display = 'none';
+    };
+
+    // Start setup on load
+    setupPhone();
+</script>
+
+</body>
+</html>
